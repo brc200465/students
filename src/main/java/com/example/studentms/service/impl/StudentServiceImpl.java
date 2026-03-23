@@ -22,10 +22,29 @@ public class StudentServiceImpl implements StudentService{
     @Autowired
     private ObjectMapper objectMapper;
 
+    private static final String STUDENT_LIST_KEY="student:list:all";
     //查询全部学生
     @Override
     public List<Student>findAll(){
-        return studentMapper.findAll();
+        String key=STUDENT_LIST_KEY;
+
+        String studentListJson=stringRedisTemplate.opsForValue().get(key);
+        if(studentListJson!=null&&!studentListJson.isEmpty()){
+            try{
+                return objectMapper.readValue(studentListJson,objectMapper.getTypeFactory().constructCollectionType(List.class,Student.class));
+            }catch(Exception e){
+                throw new RuntimeException("Redis 学生列表反序列化失败");
+            }
+        }
+        
+        List<Student> students=studentMapper.findAll();
+        try{
+            String json=objectMapper.writeValueAsString(students);
+            stringRedisTemplate.opsForValue().set(key,json,10,TimeUnit.MINUTES);
+        }catch(Exception e){
+            throw new RuntimeException("Redis 学生列表序列化失败");
+        }
+        return students;
     }
 
     //通过id查找学生
@@ -35,20 +54,28 @@ public class StudentServiceImpl implements StudentService{
 
         String studentJson=stringRedisTemplate.opsForValue().get(key);
         if(studentJson!=null&&!studentJson.isEmpty()){
+            if("null".equals(studentJson)){
+                return null;
+            }
             try{
                 return objectMapper.readValue(studentJson,Student.class);
             }catch(Exception e){
                 throw new RuntimeException("Redis 数据反序列化失败");
             }
         }
+
         Student student=studentMapper.findById(id);
-        if(student!=null){
-            try{
-                String json=objectMapper.writeValueAsString(student);
-                stringRedisTemplate.opsForValue().set(key,json,10,TimeUnit.MINUTES);
-            }catch(Exception e){
-                throw new RuntimeException("Redis 数据化序列失败");
+
+        try{
+            if(student==null){
+                stringRedisTemplate.opsForValue().set(key,"null",2,TimeUnit.MINUTES);
+                return null;
             }
+
+            String json=objectMapper.writeValueAsString(student);
+            stringRedisTemplate.opsForValue().set(key,json,10,TimeUnit.MINUTES);
+        }catch(Exception e){
+            throw new RuntimeException("Redis 数据序列化失败");
         }
         return student;
     }
@@ -56,15 +83,20 @@ public class StudentServiceImpl implements StudentService{
     //插入学生
     @Override
     public int addStudent(Student student){
-        return studentMapper.addStudent(student);
+        int rows=studentMapper.addStudent(student);
+        if(rows>0)
+            stringRedisTemplate.delete("student:list:all");
+        return rows;
     }
 
     //更新学生
     @Override
     public int updateStudent(Student student){
         int rows=studentMapper.updateStudent(student);
-        if(rows>0)
+        if(rows>0){
             stringRedisTemplate.delete("student:"+student.getId());
+            stringRedisTemplate.delete("student:list:all");
+        }
         return rows;
     }
 
@@ -72,8 +104,10 @@ public class StudentServiceImpl implements StudentService{
     @Override
     public int deleteById(Integer id){
         int rows=studentMapper.deleteById(id);
-        if(rows>0)
+        if(rows>0){
             stringRedisTemplate.delete("student:"+id);
+            stringRedisTemplate.delete("student:list:all");
+        }
         return rows;
     }
 
@@ -84,13 +118,13 @@ public class StudentServiceImpl implements StudentService{
         return studentMapper.findByPage(offset,pageSize);
     }
 
-    //按姓名查询学�?
+    //按姓名查询学生
     @Override
     public List<Student>findByName(String name){
         return studentMapper.findByName(name);
     }
 
-    //按年龄查询学�?
+    //按年龄查询学生
     @Override
     public List<Student>findByAge(Integer age){
         return studentMapper.findByAge(age);
