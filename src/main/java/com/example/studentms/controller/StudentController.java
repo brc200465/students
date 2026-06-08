@@ -1,6 +1,7 @@
 package com.example.studentms.controller;
 
 import com.example.studentms.entity.Student;
+import com.example.studentms.entity.StudentQuery;
 import com.example.studentms.exception.BusinessException;
 import com.example.studentms.result.Result;
 import com.example.studentms.service.StudentService;
@@ -99,6 +100,18 @@ public class StudentController{
         List<Student>students=studentService.findByAge(age);
         if(students.size()==0)
             return Result.fail(404,"该年龄学生不存在");
+        return Result.success(students);
+    }
+    
+    //动态SQL查询
+    @GetMapping("/search")
+    public Result<List<Student>>search(@RequestParam(required=false) String name
+    ,@RequestParam(required=false) Integer age){
+        StudentQuery query=new StudentQuery();
+        query.setName(name);
+        query.setAge(age);
+
+        List<Student>students=studentService.search(query);
         return Result.success(students);
     }
 }

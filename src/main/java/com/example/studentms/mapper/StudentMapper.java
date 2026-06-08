@@ -1,6 +1,7 @@
 package com.example.studentms.mapper;
 
 import com.example.studentms.entity.Student;
+import com.example.studentms.entity.StudentQuery;
 
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.*;
@@ -21,7 +22,7 @@ public interface StudentMapper {
     @Insert("insert into student(id,name,age) values(#{id},#{name},#{age})")
     int addStudent(Student student);
 
-    //更新学生
+    //更新学生OperationLogMapper.java
     @Update("update student set name=#{name},age=#{age} where id=#{id}")
     int updateStudent(Student student);
 
@@ -40,4 +41,7 @@ public interface StudentMapper {
     //按年龄查询学生
     @Select("select * from student where age=#{age}")
     List<Student>findByAge(Integer age);
+
+    //动态查询
+    List<Student>search(StudentQuery query);
 }

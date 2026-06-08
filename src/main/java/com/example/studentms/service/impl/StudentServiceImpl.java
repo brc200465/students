@@ -1,11 +1,16 @@
 package com.example.studentms.service.impl;
 
+import com.example.studentms.entity.OperationLog;
 import com.example.studentms.entity.Student;
+import com.example.studentms.entity.StudentQuery;
+import com.example.studentms.exception.BusinessException;
+import com.example.studentms.mapper.OperationLogMapper;
 import com.example.studentms.mapper.StudentMapper;
 import com.example.studentms.service.StudentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.concurrent.TimeUnit;
@@ -21,6 +26,9 @@ public class StudentServiceImpl implements StudentService{
    
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private OperationLogMapper operationLogMapper;
 
     private static final String STUDENT_LIST_KEY="student:list:all";
     //查询全部学生
@@ -82,10 +90,22 @@ public class StudentServiceImpl implements StudentService{
 
     //插入学生
     @Override
+    @Transactional
     public int addStudent(Student student){
         int rows=studentMapper.addStudent(student);
-        if(rows>0)
-            stringRedisTemplate.delete("student:list:all");
+        if(rows<=0)
+            throw new BusinessException(500,"新增学生失败");
+
+        OperationLog log=new OperationLog();
+        log.setStudentId(student.getId());
+        log.setOperation("ADD_STUDENT");
+        log.setContent("新增学生："+student.getName());
+
+        int logRows=operationLogMapper.addLog(log);
+        if(logRows<=0){
+            throw new BusinessException(500,"写入操作日志失败");
+        }
+        stringRedisTemplate.delete("student:list:all");
         return rows;
     }
 
@@ -128,5 +148,11 @@ public class StudentServiceImpl implements StudentService{
     @Override
     public List<Student>findByAge(Integer age){
         return studentMapper.findByAge(age);
+    }
+
+    //SQL动态查询
+    @Override
+    public List<Student>search(StudentQuery query){
+        return studentMapper.search(query);
     }
 }

@@ -1,6 +1,7 @@
 package com.example.studentms.service;
 
 import com.example.studentms.entity.Student;
+import com.example.studentms.entity.StudentQuery;
 import java.util.List;
 
 public interface StudentService {
@@ -12,4 +13,5 @@ public interface StudentService {
     List<Student>findByPage(Integer pageNum,Integer pageSize);
     List<Student> findByName(String name);
     List<Student>findByAge(Integer age);
+    List<Student>search(StudentQuery query);
 }
