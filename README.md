@@ -1,82 +1,214 @@
-# 学生管理与用户登录后台系统
+# 学生管理与用户认证后台系统
 
-## 1. 项目简介
-本项目是一个基于 **Spring Boot + MyBatis + MySQL + Redis** 开发的后端练手项目，主要实现了学生信息管理与用户注册登录等基础后台功能。
+## 一、项目简介
 
-项目在最小 CRUD 的基础上，逐步补充了以下内容：
+本项目是一个基于 Spring Boot 的学生管理与用户认证后台系统，采用 Controller、Service、Mapper 分层架构，实现了学生信息管理、用户注册登录、JWT 登录认证、Redis 缓存、操作日志、Docker 容器化部署、Nginx 双实例负载均衡以及深分页优化等功能。
 
-- Controller / Service / Mapper 分层设计
-- 统一返回结果封装
-- 全局异常处理
-- 用户注册与登录
-- BCrypt 密码加密
-- Session 登录状态保持
-- 登录拦截器
-- Redis 单条查询缓存、列表缓存、空值缓存
-
-该项目的目标是模拟一个更接近真实后台开发场景的 Java 后端项目，为后续实习投递和面试做准备。
+项目最初以学生信息 CRUD 为基础，后续逐步加入登录鉴权、缓存优化、多实例部署和异步日志等工程化能力，用于模拟真实 Java 后端项目中的常见开发场景。
 
 ---
 
-## 2. 技术栈
-- Java
-- Spring Boot
-- MyBatis
-- MySQL
-- Redis
-- Maven
+## 二、技术栈
+
+| 分类          | 技术                         |
+| ----------- | -------------------------- |
+| 后端框架        | Spring Boot                |
+| 持久层         | MyBatis                    |
+| 数据库         | MySQL                      |
+| 缓存          | Redis                      |
+| 登录认证        | Session、Spring Session、JWT |
+| 密码加密        | BCrypt                     |
+| 容器化         | Docker、Docker Compose      |
+| 反向代理 / 负载均衡 | Nginx                      |
+| 异步任务        | Spring `@Async`            |
+| 构建工具        | Maven                      |
+| 接口测试        | Postman                    |
 
 ---
 
-## 3. 项目结构
+## 三、项目功能
+
+### 1. 学生管理模块
+
+实现学生信息的基础管理功能：
+
+* 新增学生
+* 删除学生
+* 修改学生
+* 查询全部学生
+* 根据 ID 查询学生
+* 分页查询学生
+* 按姓名查询学生
+* 按年龄查询学生
+* 动态 SQL 条件查询
+* 游标分页 / 深分页优化查询
+
+### 2. 用户模块
+
+实现用户注册与登录功能：
+
+* 用户注册
+* 用户登录
+* 用户密码 BCrypt 哈希存储
+* 登录成功返回 JWT Token
+* 获取当前登录用户
+* 退出登录
+
+### 3. 登录认证模块
+
+项目实现了两类登录认证方案：
+
+#### Session 登录
+
+早期版本使用 HttpSession 保存用户登录状态。
+
+#### Spring Session + Redis
+
+将 Session 统一存储到 Redis 中，解决多实例部署时传统 Session 无法共享的问题。
+
+#### JWT Token 登录
+
+登录成功后服务端生成 JWT Token，客户端后续请求通过请求头携带：
+
+```http
+Authorization: Bearer <token>
+```
+
+后端拦截器解析并校验 Token，校验通过后放行请求。
+
+### 4. Redis 缓存模块
+
+项目引入 Redis 作为缓存层，主要缓存以下数据：
+
+* 根据学生 ID 查询结果
+* 学生列表查询结果
+* 不存在学生的空值缓存
+
+缓存策略：
+
+* 查询学生时先查 Redis，缓存未命中再查 MySQL
+* MySQL 查询成功后将结果写入 Redis
+* 查询不存在的数据时写入短时间空值缓存，降低缓存穿透风险
+* 新增、修改、删除学生后主动删除相关缓存，保证缓存一致性
+
+### 5. 操作日志模块
+
+项目新增 `operation_log` 表，记录关键操作日志，包括：
+
+* 用户登录
+* 新增学生
+* 修改学生
+* 删除学生
+
+日志字段包括：
+
+* 操作用户 ID
+* 用户名
+* 操作类型
+* 操作描述
+* 请求 IP
+* 操作是否成功
+* 创建时间
+
+日志写入使用 Spring `@Async` 异步执行，避免日志写库阻塞主业务响应。
+
+### 6. Docker + Nginx 多实例部署
+
+项目支持使用 Docker Compose 一键启动：
+
+* MySQL 容器
+* Redis 容器
+* Nginx 容器
+* Spring Boot 实例 1
+* Spring Boot 实例 2
+
+请求流程：
+
 ```text
-src/main/java/com/example/studentms
-├── controller          // 控制层，接收请求并返回结果
-├── service             // 业务层接口
-├── service/impl        // 业务层实现类
-├── mapper              // 数据访问层
-├── entity              // 实体类
-├── result              // 统一返回结果类
-├── exception           // 自定义异常和全局异常处理
-├── interceptor         // 登录拦截器
-└── config              // Spring MVC 配置类
+Client / Postman
+        ↓
+      Nginx
+        ↓
+Spring Boot Instance 1
+Spring Boot Instance 2
+        ↓
+   MySQL + Redis
+```
+
+Nginx 将请求分发到两个 Spring Boot 实例，实现基础负载均衡。
+
+---
+
+## 四、系统架构
+
+```text
+用户 / Postman
+    ↓
+Nginx 反向代理
+    ↓
+Spring Boot 实例 1 / Spring Boot 实例 2
+    ↓
+Service 业务层
+    ↓
+MyBatis Mapper
+    ↓
+MySQL
+
+Spring Boot
+    ↓
+Redis 缓存
+
+Spring Boot
+    ↓
+@Async 异步操作日志
+    ↓
+operation_log 表
 ```
 
 ---
 
-## 4. 已实现功能
+## 五、数据库设计
 
-### 4.1 学生模块
-- 查询全部学生
-- 根据 id 查询学生
-- 新增学生
-- 修改学生
-- 删除学生
-- 分页查询
-- 按姓名查询
-- 按年龄查询
+### 1. 学生表 `student`
 
-### 4.2 用户模块
-- 根据用户名查询用户
-- 用户注册
-- 用户登录
-- 获取当前登录用户
-- 退出登录
+```sql
+CREATE TABLE IF NOT EXISTS student (
+    id INT PRIMARY KEY,
+    name VARCHAR(50),
+    age INT
+);
+```
 
-### 4.3 项目通用功能
-- Controller / Service / Mapper 分层设计
-- 统一返回结果 `Result`
-- 自定义业务异常 `BusinessException`
-- 全局异常处理
-- Session 登录状态保持
-- 登录拦截器
-- Redis 缓存
-- 基础参数校验
+### 2. 用户表 `sys_user`
+
+```sql
+CREATE TABLE IF NOT EXISTS sys_user (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password VARCHAR(100) NOT NULL
+);
+```
+
+### 3. 操作日志表 `operation_log`
+
+```sql
+CREATE TABLE IF NOT EXISTS operation_log (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT,
+    username VARCHAR(50),
+    operation_type VARCHAR(50),
+    operation_desc VARCHAR(255),
+    request_ip VARCHAR(50),
+    success TINYINT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+```
 
 ---
 
-## 5. 统一返回格式
-项目中的接口统一返回如下格式：
+## 六、统一返回格式
+
+项目封装统一返回对象 `Result`，接口统一返回格式如下：
 
 ```json
 {
@@ -86,769 +218,569 @@ src/main/java/com/example/studentms
 }
 ```
 
-字段说明：
-
-- `code`：状态码
-- `message`：提示信息
-- `data`：实际返回的数据
-
-成功返回示例：
+示例：
 
 ```json
 {
   "code": 200,
   "message": "success",
-  "data": {
-    "id": 1,
-    "name": "Tom",
-    "age": 20
-  }
+  "data": [
+    {
+      "id": 1,
+      "name": "张三",
+      "age": 20
+    }
+  ]
 }
 ```
 
-失败返回示例：
+---
+
+## 七、核心接口说明
+
+### 1. 用户注册
+
+```http
+POST /users/register
+```
+
+请求体：
 
 ```json
 {
-  "code": 404,
-  "message": "student not found",
-  "data": null
+  "username": "tom",
+  "password": "123456"
 }
 ```
 
 ---
 
-## 6. 数据库设计
-
-### 6.1 学生表 `student`
-```sql
-CREATE TABLE student (
-    id INT PRIMARY KEY,
-    name VARCHAR(50),
-    age INT
-);
-```
-
-### 6.2 用户表 `sys_user`
-```sql
-CREATE TABLE sys_user (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    username VARCHAR(50) NOT NULL UNIQUE,
-    password VARCHAR(100) NOT NULL
-);
-```
-
----
-
-## 7. 核心功能说明
-
-### 7.1 分层设计
-项目采用典型的三层结构：
-
-- `Controller`：接收请求、返回结果
-- `Service`：处理业务逻辑
-- `Mapper`：与数据库交互
-
-这样做的好处是：
-
-- 代码结构更清晰
-- 职责分离更明确
-- 更符合企业项目开发习惯
-
----
-
-### 7.2 用户注册与登录
-
-#### 注册
-- 接收用户名和密码
-- 参数校验
-- 判断用户名是否已存在
-- 使用 `BCryptPasswordEncoder` 对密码加密
-- 将加密后的密码存入数据库
-
-#### 登录
-- 根据用户名查询用户
-- 使用 `matches()` 校验明文密码与数据库加密密码是否匹配
-- 登录成功后，将用户信息保存到 `HttpSession`
-- 后续请求通过 Session 判断当前用户是否已登录
-
----
-
-### 7.3 Session 登录状态保持
-登录成功后，会将当前用户信息写入 Session，例如：
-
-```java
-session.setAttribute("loginUserId", loginUser.getId());
-session.setAttribute("loginUsername", loginUser.getUsername());
-```
-
-退出登录时使用：
-
-```java
-session.invalidate();
-```
-
-让当前 Session 失效，从而清除登录状态。
-
----
-
-### 7.4 登录拦截器
-项目通过 `HandlerInterceptor` 编写了登录拦截器，对需要登录才能访问的接口进行统一拦截。
-
-实现逻辑：
-
-- 请求先进入拦截器
-- 通过 `request.getSession(false)` 获取当前 Session
-- 判断 Session 是否存在，及其中是否存在 `loginUserId`
-- 如果未登录，则返回未登录信息
-- 如果已登录，则放行
-
-放行路径包括：
-
-- `/users/login`
-- `/users/register`
-- `/error`
-
----
-
-### 7.5 全局异常处理
-项目使用：
-
-- `@RestControllerAdvice`
-- `@ExceptionHandler`
-
-实现全局异常处理。
-
-同时定义了自定义业务异常 `BusinessException`，用于统一处理：
-
-- 参数错误
-- 查询不到数据
-- 用户名已存在
-- 登录失败
-- 删除失败等业务异常
-
-普通异常则由：
-
-```java
-@ExceptionHandler(Exception.class)
-```
-
-统一兜底处理，避免异常信息直接暴露给前端。
-
----
-
-## 8. Redis 缓存设计
-
-项目中引入 Redis 作为缓存层，主要用于提升学生查询接口的访问性能，减少对 MySQL 的直接访问压力。
-
-### 8.1 已实现的缓存场景
-
-#### （1）根据 id 查询学生缓存
-接口：
+### 2. 用户登录
 
 ```http
-GET /students/{id}
+POST /users/login
 ```
 
-缓存 key 示例：
+请求体：
 
-```text
-student:1
-student:2
+```json
+{
+  "username": "tom",
+  "password": "123456"
+}
 ```
-
-实现逻辑：
-
-1. 先查 Redis
-2. Redis 有数据，直接返回
-3. Redis 没有数据，再查 MySQL
-4. MySQL 查到数据后，序列化为 JSON 写入 Redis
-5. 设置过期时间
-6. 返回查询结果
-
-对于数据库中不存在的数据，项目使用空值缓存：
-
-```text
-null
-```
-
-并设置较短过期时间，用于初步解决缓存穿透问题。
-
----
-
-#### （2）查询全部学生列表缓存
-接口：
-
-```http
-GET /students
-```
-
-缓存 key：
-
-```text
-student:list:all
-```
-
-实现逻辑：
-
-1. 先查 Redis
-2. Redis 有数据，直接返回
-3. Redis 没有数据，再查 MySQL
-4. 将查询结果序列化为 JSON 写入 Redis
-5. 设置过期时间
-6. 返回查询结果
-
----
-
-### 8.2 缓存一致性处理
-为了避免脏数据，项目对新增、修改、删除操作进行了缓存清理：
-
-- 新增学生后：删除学生列表缓存
-- 修改学生后：删除单个学生缓存和学生列表缓存
-- 删除学生后：删除单个学生缓存和学生列表缓存
-
----
-
-### 8.3 缓存问题处理
-
-#### 缓存穿透
-**定义：**  
-查询数据库中不存在的数据，Redis 中也没有，导致请求绕过缓存一直打到数据库。
-
-**当前解决方法：**
-- 空值缓存
-
----
-
-#### 缓存击穿
-**定义：**  
-某个热点 key 过期时，大量请求同时访问该 key，结果一起打到数据库。
-
-**常见解决方法：**
-- 热点 key 不轻易过期
-- 逻辑过期
-- 加互斥锁
-
----
-
-#### 缓存雪崩
-**定义：**  
-大量缓存 key 在同一时间集中失效，导致大量请求一起访问数据库。
-
-**常见解决方法：**
-- 过期时间加随机值
-- 服务降级
-- 限流
-
----
-
-## 9. 接口清单
-
----
-
-### 9.1 学生模块接口
-
-#### 1. 查询全部学生
-- 请求方式：GET
-- 请求路径：`/students`
-- 请求参数：无
 
 返回示例：
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": [
-    {
-      "id": 1,
-      "name": "Tom",
-      "age": 20
-    }
-  ]
-}
-```
 
----
-
-#### 2. 根据 id 查询学生
-- 请求方式：GET
-- 请求路径：`/students/{id}`
-- 请求参数：
-  - `id`：学生 id
-
-成功返回示例：
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "id": 1,
-    "name": "Tom",
-    "age": 20
-  }
-}
-```
-
-查询不到时返回示例：
-```json
-{
-  "code": 404,
-  "message": "student not found",
-  "data": null
-}
-```
-
----
-
-#### 3. 新增学生
-- 请求方式：POST
-- 请求路径：`/students`
-- 请求体：
-
-```json
-{
-  "id": 1,
-  "name": "Tom",
-  "age": 20
-}
-```
-
-成功返回示例：
-```json
-{
-  "code": 200,
-  "message": "新增成功",
-  "data": null
-}
-```
-
-参数错误返回示例：
-```json
-{
-  "code": 400,
-  "message": "name 不能为空",
-  "data": null
-}
-```
-
----
-
-#### 4. 修改学生
-- 请求方式：PUT
-- 请求路径：`/students`
-- 请求体：
-
-```json
-{
-  "id": 1,
-  "name": "Tom",
-  "age": 21
-}
-```
-
-成功返回示例：
-```json
-{
-  "code": 200,
-  "message": "修改成功",
-  "data": null
-}
-```
-
----
-
-#### 5. 删除学生
-- 请求方式：DELETE
-- 请求路径：`/students/{id}`
-- 请求参数：
-  - `id`：学生 id
-
-成功返回示例：
-```json
-{
-  "code": 200,
-  "message": "删除成功",
-  "data": null
-}
-```
-
----
-
-#### 6. 分页查询
-- 请求方式：GET
-- 请求路径：`/students/page`
-- 请求参数：
-  - `pageNum`：页码，必须大于等于 1
-  - `pageSize`：每页条数，必须大于等于 1
-
-请求示例：
-```text
-/students/page?pageNum=1&pageSize=5
-```
-
-成功返回示例：
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": [
-    {
-      "id": 1,
-      "name": "Tom",
-      "age": 20
-    }
-  ]
-}
-```
-
-参数错误返回示例：
-```json
-{
-  "code": 400,
-  "message": "pageNum 不能小于 1",
-  "data": null
-}
-```
-
----
-
-#### 7. 按姓名查询
-- 请求方式：GET
-- 请求路径：`/students/searchByName`
-- 请求参数：
-  - `name`：学生姓名
-
-请求示例：
-```text
-/students/searchByName?name=Tom
-```
-
-成功返回示例：
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": [
-    {
-      "id": 1,
-      "name": "Tom",
-      "age": 20
-    }
-  ]
-}
-```
-
----
-
-#### 8. 按年龄查询
-- 请求方式：GET
-- 请求路径：`/students/searchByAge`
-- 请求参数：
-  - `age`：学生年龄
-
-请求示例：
-```text
-/students/searchByAge?age=20
-```
-
-成功返回示例：
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": [
-    {
-      "id": 1,
-      "name": "Tom",
-      "age": 20
-    }
-  ]
-}
-```
-
----
-
-### 9.2 用户模块接口
-
-#### 1. 根据用户名查询用户
-- 请求方式：GET
-- 请求路径：`/users/byUsername`
-- 请求参数：
-  - `username`：用户名
-
-请求示例：
-```text
-/users/byUsername?username=tom
-```
-
-成功返回示例：
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "id": 1,
-    "username": "tom",
-    "password": null
-  }
-}
-```
-
----
-
-#### 2. 用户注册
-- 请求方式：POST
-- 请求路径：`/users/register`
-- 请求体：
-
-```json
-{
-  "username": "tom",
-  "password": "123456"
-}
-```
-
-成功返回示例：
-```json
-{
-  "code": 200,
-  "message": "注册成功",
-  "data": null
-}
-```
-
-用户名重复返回示例：
-```json
-{
-  "code": 400,
-  "message": "用户名已存在",
-  "data": null
-}
-```
-
----
-
-#### 3. 用户登录
-- 请求方式：POST
-- 请求路径：`/users/login`
-- 请求体：
-
-```json
-{
-  "username": "tom",
-  "password": "123456"
-}
-```
-
-成功返回示例：
 ```json
 {
   "code": 200,
   "message": "登录成功",
   "data": {
-    "id": 1,
+    "userId": 1,
     "username": "tom",
-    "password": null
+    "token": "eyJhbGciOiJIUzI1NiJ9..."
   }
 }
 ```
 
 ---
 
-#### 4. 获取当前登录用户
-- 请求方式：GET
-- 请求路径：`/users/me`
+### 3. 获取当前登录用户
 
-未登录返回示例：
+```http
+GET /users/me
+```
+
+请求头：
+
+```http
+Authorization: Bearer <token>
+```
+
+---
+
+### 4. 新增学生
+
+```http
+POST /students
+```
+
+请求头：
+
+```http
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+请求体：
+
 ```json
 {
-  "code": 401,
-  "message": "当前未登录",
-  "data": null
+  "id": 1,
+  "name": "张三",
+  "age": 20
 }
 ```
 
 ---
 
-#### 5. 退出登录
-- 请求方式：POST
-- 请求路径：`/users/logout`
+### 5. 查询全部学生
 
-成功返回示例：
+```http
+GET /students
+```
+
+请求头：
+
+```http
+Authorization: Bearer <token>
+```
+
+---
+
+### 6. 根据 ID 查询学生
+
+```http
+GET /students/{id}
+```
+
+示例：
+
+```http
+GET /students/1
+```
+
+---
+
+### 7. 修改学生
+
+```http
+PUT /students
+```
+
+请求体：
+
+```json
+{
+  "id": 1,
+  "name": "张三",
+  "age": 21
+}
+```
+
+---
+
+### 8. 删除学生
+
+```http
+DELETE /students/{id}
+```
+
+示例：
+
+```http
+DELETE /students/1
+```
+
+---
+
+### 9. 普通分页查询
+
+```http
+GET /students/page?pageNum=1&pageSize=10
+```
+
+普通分页基于：
+
+```sql
+LIMIT offset, pageSize
+```
+
+适合数据量较小或需要跳转指定页码的场景。
+
+---
+
+### 10. 游标分页 / 深分页优化查询
+
+```http
+GET /students/scroll?lastId=0&pageSize=20
+```
+
+请求示例：
+
+```http
+GET /students/scroll?lastId=0&pageSize=2
+```
+
+返回示例：
+
 ```json
 {
   "code": 200,
-  "message": "退出成功",
-  "data": null
+  "message": "success",
+  "data": {
+    "records": [
+      {
+        "id": 1,
+        "name": "张三",
+        "age": 20
+      },
+      {
+        "id": 2,
+        "name": "李四",
+        "age": 21
+      }
+    ],
+    "nextLastId": 2,
+    "hasNext": true
+  }
 }
 ```
 
 ---
 
-## 10. 参数校验
-当前项目已实现的基础参数校验包括：
+## 八、Redis 缓存设计
 
-- `pageNum` 不能小于 1
-- `pageSize` 不能小于 1
-- `name` 不能为空，也不能只包含空格
-- `age` 不能小于 0
-- `username` 不能为空
-- `password` 不能为空
-- 修改学生时 `id` 不能为空
+### 1. 学生详情缓存
+
+Key 示例：
+
+```text
+student:1
+```
+
+查询流程：
+
+```text
+先查 Redis
+  ↓
+命中：直接返回
+  ↓
+未命中：查询 MySQL
+  ↓
+写入 Redis
+  ↓
+返回结果
+```
+
+### 2. 学生列表缓存
+
+Key 示例：
+
+```text
+student:list:all
+```
+
+### 3. 空值缓存
+
+当查询不存在的学生 ID 时，向 Redis 写入短时间空值缓存：
+
+```text
+student:999 -> "null"
+```
+
+用于降低缓存穿透风险。
+
+### 4. 缓存一致性处理
+
+学生数据发生变化时主动删除相关缓存：
+
+* 新增学生：删除学生列表缓存
+* 修改学生：删除学生详情缓存和学生列表缓存
+* 删除学生：删除学生详情缓存和学生列表缓存
 
 ---
 
-## 11. 启动项目
+## 九、JWT 登录认证流程
 
-### 11.1 启动 MySQL
-确保本地 MySQL 服务已启动，并已创建数据库和表。
-
-### 11.2 启动 Redis
-在 Ubuntu/WSL 中执行：
-
-```bash
-sudo service redis-server start
+```text
+用户登录
+  ↓
+校验用户名和密码
+  ↓
+生成 JWT Token
+  ↓
+返回给客户端
+  ↓
+客户端后续请求携带 Authorization 请求头
+  ↓
+拦截器解析 Token
+  ↓
+校验通过后放行
 ```
 
-测试 Redis 是否正常运行：
+请求头格式：
 
-```bash
-redis-cli ping
+```http
+Authorization: Bearer <token>
 ```
 
-若返回：
+JWT 中保存：
 
-```bash
-PONG
-```
+* 用户 ID
+* 用户名
+* 签发时间
+* 过期时间
 
-说明 Redis 已启动成功。
+注意：JWT 只做签名校验，不应存放密码等敏感信息。
 
 ---
 
-### 11.3 配置数据库与 Redis
-在 `src/main/resources/application.properties` 中配置：
+## 十、Spring Session + Redis
 
-```properties
-spring.datasource.url=jdbc:mysql://localhost:3306/你的数据库名?serverTimezone=Asia/Shanghai&characterEncoding=UTF-8
-spring.datasource.username=root
-spring.datasource.password=你的密码
-spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+项目早期使用 HttpSession 保存登录状态，但普通 Session 默认存储在单个 Tomcat 实例内存中。
 
-mybatis.configuration.map-underscore-to-camel-case=true
+在多实例部署场景下，如果用户登录请求访问实例 1，而后续请求被 Nginx 转发到实例 2，实例 2 可能无法识别登录状态。
 
-spring.data.redis.host=localhost
-spring.data.redis.port=6379
-spring.data.redis.database=0
+因此项目接入 Spring Session + Redis，将 Session 统一存储到 Redis 中，实现多实例 Session 共享。
+
+---
+
+## 十一、Docker Compose 部署
+
+### 1. 打包项目
+
+```bash
+mvn clean package -DskipTests
 ```
 
-如 Redis 设置了密码，还需补充：
+### 2. 启动服务
 
-```properties
-spring.data.redis.password=你的密码
+```bash
+docker compose up -d --build
+```
+
+### 3. 查看容器
+
+```bash
+docker ps
+```
+
+预期容器包括：
+
+```text
+studentms-mysql
+studentms-redis
+studentms-nginx
+studentms-app-1
+studentms-app-2
+```
+
+### 4. 停止服务
+
+```bash
+docker compose down
+```
+
+### 5. 停止服务并删除数据卷
+
+```bash
+docker compose down -v
+```
+
+注意：`docker compose down -v` 会删除 MySQL 数据卷，数据库数据会被清空。
+
+---
+
+## 十二、Nginx 负载均衡
+
+Nginx 配置两个 Spring Boot 后端实例：
+
+```nginx
+upstream studentms_backend {
+    server studentms-app-1:8080;
+    server studentms-app-2:8080;
+}
+```
+
+请求通过 Nginx 统一入口访问：
+
+```text
+http://localhost:8080
+```
+
+Nginx 将请求分发到两个 Spring Boot 实例。
+
+可以通过测试接口 `/server/info` 多次请求，观察返回的容器名称是否变化，从而验证负载均衡是否生效。
+
+---
+
+## 十三、异步操作日志
+
+项目使用 `@Async` 实现异步日志写入。
+
+同步日志的问题：
+
+```text
+主业务操作
+  ↓
+写操作日志
+  ↓
+日志写完后接口才返回
+```
+
+异步日志流程：
+
+```text
+主业务操作成功
+  ↓
+提交日志写入任务
+  ↓
+接口直接返回
+  ↓
+日志由异步线程写入数据库
+```
+
+这样可以避免操作日志写入阻塞主业务响应。
+
+当前记录的操作类型包括：
+
+```text
+USER_LOGIN
+STUDENT_ADD
+STUDENT_UPDATE
+STUDENT_DELETE
 ```
 
 ---
 
-### 11.4 启动 Spring Boot 项目
-运行启动类，启动成功后即可通过浏览器、Postman 或 Apifox 测试接口。
+## 十四、深分页优化
+
+项目同时提供普通分页和游标分页两种方式。
+
+### 1. 普通分页
+
+普通分页使用：
+
+```sql
+SELECT * FROM student
+ORDER BY id
+LIMIT offset, pageSize;
+```
+
+当查询深页码时，例如第 950 页，每页 50 条：
+
+```text
+offset = (950 - 1) * 50 = 47450
+```
+
+数据库需要先扫描并跳过大量记录，再返回当前页数据，页码越深性能越差。
+
+### 2. 游标分页
+
+游标分页使用上一页最后一条记录的 ID 作为游标：
+
+```sql
+SELECT * FROM student
+WHERE id > #{lastId}
+ORDER BY id ASC
+LIMIT #{pageSize};
+```
+
+接口示例：
+
+```http
+GET /students/scroll?lastId=0&pageSize=20
+```
+
+返回字段：
+
+| 字段         | 说明              |
+| ---------- | --------------- |
+| records    | 当前页数据           |
+| nextLastId | 下一次请求使用的 lastId |
+| hasNext    | 是否还有下一页         |
+
+优点：
+
+* 可以利用主键索引
+* 避免大 offset 扫描
+* 适合滚动加载或“加载更多”场景
+
+缺点：
+
+* 不适合直接跳转到指定页码
+* 需要有稳定排序规则
 
 ---
 
-## 12. 常用 Redis 命令
+## 十五、项目截图
 
-进入 Redis 客户端：
+建议将测试截图保存到 `screenshots` 目录。
 
-```bash
-redis-cli
+示例：
+
+```text
+screenshots/
+├── docker-ps.png
+├── login-token.png
+├── query-students.png
+├── redis-cache.png
+├── nginx-load-balance.png
+├── operation-log.png
+└── cursor-page.png
 ```
 
-选择数据库：
+### 1. Docker 容器启动
 
-```bash
-SELECT 0
-```
+![Docker 容器启动](screenshots/docker-ps.png)
 
-设置键值：
+### 2. 登录接口返回 Token
 
-```bash
-set name tom
-```
+![登录接口返回 Token](screenshots/login-token.png)
 
-获取键值：
+### 3. 查询学生列表
 
-```bash
-get name
-```
+![查询学生列表](screenshots/query-students.png)
 
-删除键：
+### 4. Redis 缓存 Key
 
-```bash
-del name
-```
+![Redis 缓存](screenshots/redis-cache.png)
 
-设置过期时间：
+### 5. Nginx 负载均衡测试
 
-```bash
-expire name 60
-```
+![Nginx 负载均衡测试](screenshots/nginx-load-balance.png)
 
-查看剩余过期时间：
+### 6. 异步操作日志
 
-```bash
-ttl name
-```
+![异步操作日志](screenshots/operation-log.png)
 
-判断键是否存在：
+### 7. 游标分页测试
 
-```bash
-exists name
-```
-
-查看当前数据库中的键：
-
-```bash
-keys *
-keys student:*
-```
+![游标分页测试](screenshots/cursor-page.png)
 
 ---
 
-## 13. 项目收获
-通过该项目，掌握了以下内容：
+## 十六、项目亮点
 
-- Spring Boot 基础 Web 开发
-- MyBatis 操作数据库
-- MySQL 基础增删改查
-- Controller / Service / Mapper 分层设计
-- 统一返回结果封装
-- 分页查询与条件查询实现
-- 用户注册与登录流程
-- BCrypt 密码加密
-- Session 登录状态保持
-- 登录拦截器实现
-- 全局异常处理
-- Redis 单条缓存、列表缓存、空值缓存
-- 缓存一致性与缓存穿透的基础处理思路
+* 基于 Spring Boot + MyBatis + MySQL 实现学生信息增删改查、分页查询和动态 SQL 条件查询。
+* 使用 BCrypt 对用户密码进行哈希存储，避免明文密码入库。
+* 基于 JWT 实现 Token 登录认证，并通过拦截器统一校验登录状态。
+* 引入 Redis 缓存学生详情和学生列表，减少重复数据库查询。
+* 通过空值缓存降低缓存穿透风险，并在数据变更后主动删除相关缓存。
+* 接入 Spring Session + Redis，实现多实例场景下的 Session 共享。
+* 使用 Docker Compose 编排 MySQL、Redis、Nginx 和两个 Spring Boot 实例，实现一键部署。
+* 通过 Nginx 实现反向代理和负载均衡，模拟多实例部署场景。
+* 设计 operation_log 操作日志表，并使用 `@Async` 异步写入日志，降低主业务响应耗时。
+* 新增游标分页接口，优化普通分页在深分页场景下的性能问题。
 
 ---
 
-## 14. 后续可优化方向
-- 引入 Swagger / OpenAPI 生成接口文档
-- 使用参数校验注解优化参数校验逻辑
-- 将密码、数据库、Redis 配置进一步拆分管理
-- 引入 JWT 进行无状态登录
-- 优化 Redis 缓存策略
-- 增加日志记录
-- 增加前后端联调
-- 补充更复杂的业务模块
+## 十七、后续优化方向
+
+* 引入 Spring Security 统一认证与权限控制。
+* 增加角色权限模型，实现管理员与普通用户区分。
+* 使用 AOP + 自定义注解统一记录操作日志，减少 Controller 中的重复代码。
+* 引入统一参数校验框架，如 Jakarta Validation。
+* 增加接口限流，防止高频请求影响系统稳定性。
+* 增加 Docker 健康检查和服务启动顺序控制。
+* 针对热点缓存加入互斥锁或逻辑过期，进一步优化缓存击穿问题。
 
 ---
 
-## 15. 项目亮点总结
-- 基于 Spring Boot + MyBatis + MySQL 完成学生管理和用户登录后台功能开发
-- 使用 BCryptPasswordEncoder 对密码进行加密存储，避免明文密码入库
-- 使用 HttpSession 保持登录状态，并通过 HandlerInterceptor 编写登录拦截器
-- 封装统一返回结果，结合自定义异常和全局异常处理提升接口规范性
-- 引入 Redis 对学生单条查询和列表查询进行缓存，并通过空值缓存初步解决缓存穿透问题
-- 对新增、修改、删除操作进行缓存清理，保证缓存与数据库数据的一致性
+## 十八、项目总结
+
+本项目从基础 CRUD 出发，逐步加入登录认证、Redis 缓存、统一异常处理、JWT、Spring Session、Docker 容器化、Nginx 负载均衡、异步操作日志和深分页优化等功能，覆盖了 Java 后端开发中常见的业务开发、缓存设计、登录鉴权、部署和性能优化场景。
+
+通过该项目，能够较完整地展示 Spring Boot 后端项目从基础功能开发到工程化增强的过程。
