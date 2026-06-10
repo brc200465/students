@@ -2,6 +2,7 @@ package com.example.studentms.service;
 
 import com.example.studentms.entity.Student;
 import com.example.studentms.entity.StudentQuery;
+import com.example.studentms.vo.CursorPageResult;
 import java.util.List;
 
 public interface StudentService {
@@ -14,4 +15,5 @@ public interface StudentService {
     List<Student> findByName(String name);
     List<Student>findByAge(Integer age);
     List<Student>search(StudentQuery query);
+    CursorPageResult<Student>findByCursor(Integer lastId,Integer pageizeize);
 }

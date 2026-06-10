@@ -44,4 +44,12 @@ public interface StudentMapper {
 
     //动态查询
     List<Student>search(StudentQuery query);
+
+    //深分页查询
+    @Select("SELECT * FROM student "+
+        "where id>#{lastId} "+
+        "order by id asc "+
+        "limit #{limit}"
+    )
+    List<Student>findByCursor(@Param("lastId") Integer lastId,@Param("limit") Integer limit);
 }

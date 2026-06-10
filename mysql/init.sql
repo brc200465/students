@@ -13,3 +13,14 @@ CREATE TABLE IF NOT EXISTS sys_user (
     username VARCHAR(50) NOT NULL UNIQUE,
     password VARCHAR(100) NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS operation_log (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT,
+    username VARCHAR(50),
+    operation_type VARCHAR(50),
+    operation_desc VARCHAR(255),
+    request_ip VARCHAR(50),
+    success TINYINT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

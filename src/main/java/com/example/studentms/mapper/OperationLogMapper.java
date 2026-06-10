@@ -6,8 +6,8 @@ import org.apache.ibatis.annotations.Mapper;
 
 @Mapper
 public interface OperationLogMapper {
-    
-    @Insert("insert into operation_log(student_id,operation,content)"+
-             "values(#{studentId},#{operation},#{content})")
+
+    @Insert("INSERT INTO operation_log(user_id, username, operation_type, operation_desc, request_ip, success) " +
+            "VALUES(#{userId}, #{username}, #{operationType}, #{operationDesc}, #{requestIp}, #{success})")
     int addLog(OperationLog log);
 }

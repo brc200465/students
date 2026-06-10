@@ -1,12 +1,12 @@
 package com.example.studentms.service.impl;
 
-import com.example.studentms.entity.OperationLog;
 import com.example.studentms.entity.Student;
 import com.example.studentms.entity.StudentQuery;
 import com.example.studentms.exception.BusinessException;
-import com.example.studentms.mapper.OperationLogMapper;
 import com.example.studentms.mapper.StudentMapper;
+import com.example.studentms.service.OperationLogService;
 import com.example.studentms.service.StudentService;
+import com.example.studentms.vo.CursorPageResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -26,9 +26,6 @@ public class StudentServiceImpl implements StudentService{
    
     @Autowired
     private ObjectMapper objectMapper;
-
-    @Autowired
-    private OperationLogMapper operationLogMapper;
 
     private static final String STUDENT_LIST_KEY="student:list:all";
     //查询全部学生
@@ -96,16 +93,8 @@ public class StudentServiceImpl implements StudentService{
         if(rows<=0)
             throw new BusinessException(500,"新增学生失败");
 
-        OperationLog log=new OperationLog();
-        log.setStudentId(student.getId());
-        log.setOperation("ADD_STUDENT");
-        log.setContent("新增学生："+student.getName());
-
-        int logRows=operationLogMapper.addLog(log);
-        if(logRows<=0){
-            throw new BusinessException(500,"写入操作日志失败");
-        }
         stringRedisTemplate.delete("student:list:all");
+
         return rows;
     }
 
@@ -154,5 +143,37 @@ public class StudentServiceImpl implements StudentService{
     @Override
     public List<Student>search(StudentQuery query){
         return studentMapper.search(query);
+    }
+
+    //深分页查询
+    @Override
+    public CursorPageResult<Student>findByCursor(Integer lastId,Integer pageSize){
+        
+        if(lastId==null||lastId<0){
+            lastId=0;
+        }
+
+        if(pageSize==null||pageSize<=0){
+            pageSize=20;
+        }
+
+        if(pageSize>100){
+            pageSize=100;
+        }
+
+        List<Student>students=studentMapper.findByCursor(lastId,pageSize+1);
+
+        boolean hasNext=students.size()>pageSize;
+
+        if(hasNext){
+            students=students.subList(0,pageSize);
+        }
+
+        Integer nextLastId=null;
+        if(!students.isEmpty()){
+            nextLastId=students.get(students.size()-1).getId();
+        }
+
+        return new CursorPageResult<>(students,nextLastId,hasNext);
     }
 }
