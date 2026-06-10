@@ -89,4 +89,10 @@ public class UserController {
     public Result<String>logout(HttpSession session){
         return Result.success("退出登录成功",null);
     }
+
+    @GetMapping("/server/info")
+    public Result<String> serverInfo() throws Exception {
+        String hostname = java.net.InetAddress.getLocalHost().getHostName();
+        return Result.success("当前处理请求的容器：" + hostname);
+    }
 }

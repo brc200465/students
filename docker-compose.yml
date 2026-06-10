@@ -23,15 +23,33 @@ services:
     ports:
       - "6380:6379"
 
-  studentms:
+  studentms-app-1:
     build: .
-    container_name: studentms-app
+    container_name: studentms-app-1
     restart: always
     depends_on:
       - mysql
       - redis
+
+  studentms-app-2:
+    build: .
+    container_name: studentms-app-2
+    restart: always
+    depends_on:
+      - mysql
+      - redis
+
+  nginx:
+    image: nginx:latest
+    container_name: studentms-nginx
+    restart: always
+    depends_on:
+      - studentms-app-1
+      - studentms-app-2
     ports:
-      - "8080:8080"
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
 
 volumes:
   mysql_data:
