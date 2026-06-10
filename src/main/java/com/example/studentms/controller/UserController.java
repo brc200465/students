@@ -1,9 +1,14 @@
 package com.example.studentms.controller;
 
+
 import com.example.studentms.entity.User;
 import com.example.studentms.exception.BusinessException;
 import com.example.studentms.result.Result;
 import com.example.studentms.service.UserService;
+import com.example.studentms.util.JwtUtil;
+import com.example.studentms.vo.LoginResponse;
+
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,6 +16,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 @RestController
 @RequestMapping("/users")
 public class UserController {
+
+    @Autowired
+    private JwtUtil jwtUtil;
 
     @Autowired
     private UserService userService;
@@ -48,7 +56,7 @@ public class UserController {
 
 
     @PostMapping("/login")
-    public Result<User>login(@RequestBody User user,HttpSession session){
+    public Result<LoginResponse>login(@RequestBody User user){
         if(user.getUsername()==null||user.getUsername().trim().isEmpty())
             throw new BusinessException(400,"username不能为空");
         if(user.getPassword()==null||user.getPassword().trim().isEmpty())
@@ -58,16 +66,20 @@ public class UserController {
         if(loginUser==null)
             throw new BusinessException(400,"用户名或密码错误");
 
-        session.setAttribute("loginUserId",loginUser.getId());
-        session.setAttribute("loginUsername",loginUser.getUsername());
+        String token=jwtUtil.generateToken(loginUser.getId(),loginUser.getUsername());
 
-        loginUser.setPassword(null);
-        return Result.success(loginUser);
+        LoginResponse loginResponse=new LoginResponse(
+            loginUser.getId(),
+            loginUser.getUsername(),
+            token
+        );
+
+        return Result.success(loginResponse);
     }
 
     @GetMapping("/me")
-    public Result<String>me(HttpSession session){
-        Object username=session.getAttribute("loginUsername");
+    public Result<String>me(HttpServletRequest request){
+        Object username=request.getAttribute("loginUsername");
         if(username==null)
             return Result.fail(401,"当前未登录");
         return Result.success(username.toString());
@@ -75,7 +87,6 @@ public class UserController {
 
     @PostMapping("/logout")
     public Result<String>logout(HttpSession session){
-        session.invalidate();
         return Result.success("退出登录成功",null);
     }
 }
